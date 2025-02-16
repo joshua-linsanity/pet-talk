@@ -26,120 +26,123 @@ class SweatshopWorker(QObject):
         self.species = species
 
     def run(self):
-        base64_image = encode_image(self.image_path)
-        prompt = (
-                "Determine if the following query is health-related or conversational. "
-                "Examples of health-related queries: 'Are you healthy?' or 'Are you okay?' etc. "
-                "If the query is health-related, reply HEALTH. Else, reply CONVO. "
-                "User query: "
+        try:
+            base64_image = encode_image(self.image_path)
+            prompt = (
+                    "Determine if the following query is health-related or conversational. "
+                    "Examples of health-related queries: 'Are you healthy?' or 'Are you okay?' etc. "
+                    "If the query is health-related, reply HEALTH. Else, reply CONVO. "
+                    "User query: "
+                    )
+            response = worker.chat.completions.create(
+                model="gpt-4o-mini",
+                messages=[
+                    {
+                        "role": "user",
+                        "content": [
+                            {
+                                "type": "text",
+                                "text": prompt + self.question,
+                            },
+                        ],
+                    }
+                ],
+                max_tokens=300
+            )
+            response = response.choices[0].message.content
+            if response == "HEALTH":
+                health = True
+            elif response == "CONVO": 
+                health = False
+            else: 
+                print(response)
+                raise RuntimeError("openai sucks too")
+
+            if health: 
+                prompt = (
+                    f"You are a professional veterinarian specializing in dogs, cats, and bunnies. "
+                    "Carefully *analyze the attached image* along with the user query and offer your clinical diagnosis. "
+                    "(Note the user query may be addressed to the pet, but respond as a veterinarian. "
+                    "If the pet appears healthy, respond as such. "
+                    "Otherwise, report the health concerns that may be present in the pet. "
+                    "Keep all responses under 1000 characters. "
+                    "User query: "
                 )
-        response = worker.chat.completions.create(
-            model="gpt-4o-mini",
-            messages=[
-                {
-                    "role": "user",
-                    "content": [
+                response = worker.chat.completions.create(
+                    model="gpt-4o-mini",
+                    messages=[
                         {
-                            "type": "text",
-                            "text": prompt + self.question,
-                        },
+                            "role": "user",
+                            "content": [
+                                {
+                                    "type": "text",
+                                    "text": prompt + self.question,
+                                },
+                                {
+                                    "type": "image_url",
+                                    "image_url": {"url": f"data:image/jpeg;base64,{base64_image}"},
+                                },
+                            ],
+                        }
                     ],
-                }
-            ],
-            max_tokens=300
-        )
-        response = response.choices[0].message.content
-        if response == "HEALTH":
-            health = True
-        elif response == "CONVO": 
-            health = False
-        else: 
-            print(response)
-            raise RuntimeError("openai sucks too")
+                    max_tokens=300
+                )
+                response = response.choices[0].message.content
 
-        if health: 
-            prompt = (
-                f"You are a professional veterinarian specializing in dogs, cats, and bunnies. "
-                "Carefully *analyze the attached image* along with the user query and offer your clinical diagnosis. "
-                "(Note the user query may be addressed to the pet, but respond as a veterinarian. "
-                "If the pet appears healthy, respond as such. "
-                "Otherwise, report the health concerns that may be present in the pet. "
-                "Keep all responses under 1000 characters. "
-                "User query: "
-            )
-            response = worker.chat.completions.create(
-                model="gpt-4o-mini",
-                messages=[
-                    {
-                        "role": "user",
-                        "content": [
-                            {
-                                "type": "text",
-                                "text": prompt + self.question,
-                            },
-                            {
-                                "type": "image_url",
-                                "image_url": {"url": f"data:image/jpeg;base64,{base64_image}"},
-                            },
-                        ],
-                    }
-                ],
-                max_tokens=300
-            )
-            response = response.choices[0].message.content
+                prompt = ("Consider the following diagnosis by a veterinarian. "
+                    f"You are named {self.name}. "
+                    "Replace all third person references with first person references. "
+                    "Make sure your tone is warm and cute! "
+                    "**Make sure to preserve the medical/clinical information in the diagnosis.** "
+                )
+                response = worker.chat.completions.create(
+                    model="gpt-4o-mini",
+                    messages=[
+                        {
+                            "role": "user",
+                            "content": [
+                                {
+                                    "type": "text",
+                                    "text": prompt + response,
+                                },
+                            ],
+                        }
+                    ],
+                    max_tokens=300
+                )
+                
+                response = response.choices[0].message.content
+                self.finished.emit(response)
+            else:
+                prompt = (
+                    f"You are a {self.species} named {self.name}. Consider the image of yourself "
+                    "attached. Respond to the human's message in a conversational and cute tone. "
+                    "Message: "
+                )
+                response = worker.chat.completions.create(
+                    model="gpt-4o-mini",
+                    messages=[
+                        {
+                            "role": "user",
+                            "content": [
+                                {
+                                    "type": "text",
+                                    "text": prompt + self.question,
+                                },
+                                {
+                                    "type": "image_url",
+                                    "image_url": {"url": f"data:image/jpeg;base64,{base64_image}"},
+                                },
+                            ],
+                        }
+                    ],
+                    max_tokens=300
+                )
 
-            prompt = ("Consider the following diagnosis by a veterinarian. "
-                f"You are named {self.name}. "
-                "Replace all third person references with first person references. "
-                "Make sure your tone is warm and friendly. "
-                "**Make sure to preserve the medical/clinical information in the diagnosis.** "
-            )
-            response = worker.chat.completions.create(
-                model="gpt-4o-mini",
-                messages=[
-                    {
-                        "role": "user",
-                        "content": [
-                            {
-                                "type": "text",
-                                "text": prompt + response,
-                            },
-                        ],
-                    }
-                ],
-                max_tokens=300
-            )
-            
-            response = response.choices[0].message.content
-            self.finished.emit(response)
-        else:
-            prompt = (
-                f"You are a {self.species} named {self.name}. Consider the image of yourself "
-                "attached. Respond to the human's message in a conversational and cute tone. "
-                "Message: "
-            )
-            response = worker.chat.completions.create(
-                model="gpt-4o-mini",
-                messages=[
-                    {
-                        "role": "user",
-                        "content": [
-                            {
-                                "type": "text",
-                                "text": prompt + self.question,
-                            },
-                            {
-                                "type": "image_url",
-                                "image_url": {"url": f"data:image/jpeg;base64,{base64_image}"},
-                            },
-                        ],
-                    }
-                ],
-                max_tokens=300
-            )
-
-            response = response.choices[0].message.content
-            self.finished.emit(response)
+                response = response.choices[0].message.content
+                self.finished.emit(response)
+        except Exception as e:
+            self.error.emit(str(e))
 
 ##############################
 # Video Widget (OpenCV feed) #
@@ -182,9 +185,11 @@ class ChatBubble(QLabel):
         super().__init__(text)
         self.setWordWrap(True)
         self.setMaximumWidth(400)
-        self.setSizePolicy(QSizePolicy.Preferred, QSizePolicy.Expanding)
+        if not is_sender: 
+            self.setSizePolicy(QSizePolicy.Preferred, QSizePolicy.Expanding)
         if is_sender:
-            bg_color = "#007AFF"
+            # bg_color = "#007AFF"
+            bg_color = "#FAB8D8"
             text_color = "#FFFFFF"
         else:
             bg_color = "#E5E5EA"
@@ -336,7 +341,7 @@ class ChatWindow(QWidget):
         receiver_layout.addStretch()
         self.chat_layout.addLayout(receiver_layout)
         self.chat_layout.update()
-        bubble.adjustSize()
+        # bubble.adjustSize()
         self._scroll_to_bottom()
     
     def _scroll_to_bottom(self):
@@ -350,7 +355,7 @@ class ChatWindow(QWidget):
 class MainWindow(QWidget):
     def __init__(self):
         super().__init__()
-        name = "Bambi"
+        name = "Hippo"
         species = "Bunny"
 
         self.setWindowTitle("Video & Chat")

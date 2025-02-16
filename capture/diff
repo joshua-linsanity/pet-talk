@@ -1,0 +1,194 @@
+3a4
+> import base64
+8,9c9
+< from google import genai
+< from google.genai import types
+---
+> from openai import OpenAI
+11c11
+< client = genai.Client(api_key="AIzaSyAMu8l7bTk3S9svfF98mvrcxmiFs94yx_o")
+---
+> worker = OpenAI()
+14c14
+< # Worker Thread for Gemini #
+---
+> # Worker Thread for Open AI  #
+16c16,17
+< class GeminiWorker(QObject):
+---
+> 
+> class SweatshopWorker(QObject):
+19,20c20,21
+<     
+<     def __init__(self, question, image_path):
+---
+> 
+>     def __init__(self, question, image_path, name, species):
+23a25,26
+>         self.name = name
+>         self.species = species
+27,32c30,50
+<             # Open the image
+<             image = PIL.Image.open(self.image_path)
+<             header = (
+<                 "If the user query is conversational, respond as the pet. "
+<                 "Otherwise, respond as a vet. Limit response to 280 characters for "
+<                 "conversational queries but 400 for medical questions. User query: "
+---
+>             base64_image = encode_image(self.image_path)
+>             prompt = (
+>                     "Determine if the following query is health-related or conversational. "
+>                     "Examples of health-related queries: 'Are you healthy?' or 'Are you okay?' etc. "
+>                     "If the query is health-related, reply HEALTH. Else, reply CONVO. "
+>                     "User query: "
+>                     )
+>             response = worker.chat.completions.create(
+>                 model="gpt-4o-mini",
+>                 messages=[
+>                     {
+>                         "role": "user",
+>                         "content": [
+>                             {
+>                                 "type": "text",
+>                                 "text": prompt + self.question,
+>                             },
+>                         ],
+>                     }
+>                 ],
+>                 max_tokens=300
+34,39c52,143
+<             # This is the long-running Gemini call
+<             response = client.models.generate_content(
+<                 model="gemini-2.0-flash",
+<                 contents=[header + self.question, image]
+<             )
+<             self.finished.emit(response.text)
+---
+>             response = response.choices[0].message.content
+>             if response == "HEALTH":
+>                 health = True
+>             elif response == "CONVO": 
+>                 health = False
+>             else: 
+>                 print(response)
+>                 raise RuntimeError("openai sucks too")
+> 
+>             if health: 
+>                 prompt = (
+>                     f"You are a professional veterinarian specializing in dogs, cats, and bunnies. "
+>                     "Carefully *analyze the attached image* along with the user query and offer your clinical diagnosis. "
+>                     "(Note the user query may be addressed to the pet, but respond as a veterinarian. "
+>                     "If the pet appears healthy, respond as such. "
+>                     "Otherwise, report the health concerns that may be present in the pet. "
+>                     "Keep all responses under 1000 characters. "
+>                     "User query: "
+>                 )
+>                 response = worker.chat.completions.create(
+>                     model="gpt-4o-mini",
+>                     messages=[
+>                         {
+>                             "role": "user",
+>                             "content": [
+>                                 {
+>                                     "type": "text",
+>                                     "text": prompt + self.question,
+>                                 },
+>                                 {
+>                                     "type": "image_url",
+>                                     "image_url": {"url": f"data:image/jpeg;base64,{base64_image}"},
+>                                 },
+>                             ],
+>                         }
+>                     ],
+>                     max_tokens=300
+>                 )
+>                 response = response.choices[0].message.content
+> 
+>                 prompt = ("Consider the following diagnosis by a veterinarian. "
+>                     f"You are named {self.name}. "
+>                     "Replace all third person references with first person references. "
+>                     "Make sure your tone is warm and cute! "
+>                     "**Make sure to preserve the medical/clinical information in the diagnosis.** "
+>                 )
+>                 response = worker.chat.completions.create(
+>                     model="gpt-4o-mini",
+>                     messages=[
+>                         {
+>                             "role": "user",
+>                             "content": [
+>                                 {
+>                                     "type": "text",
+>                                     "text": prompt + response,
+>                                 },
+>                             ],
+>                         }
+>                     ],
+>                     max_tokens=300
+>                 )
+>                 
+>                 response = response.choices[0].message.content
+>                 self.finished.emit(response)
+>             else:
+>                 prompt = (
+>                     f"You are a {self.species} named {self.name}. Consider the image of yourself "
+>                     "attached. Respond to the human's message in a conversational and cute tone. "
+>                     "Message: "
+>                 )
+>                 response = worker.chat.completions.create(
+>                     model="gpt-4o-mini",
+>                     messages=[
+>                         {
+>                             "role": "user",
+>                             "content": [
+>                                 {
+>                                     "type": "text",
+>                                     "text": prompt + self.question,
+>                                 },
+>                                 {
+>                                     "type": "image_url",
+>                                     "image_url": {"url": f"data:image/jpeg;base64,{base64_image}"},
+>                                 },
+>                             ],
+>                         }
+>                     ],
+>                     max_tokens=300
+>                 )
+> 
+>                 response = response.choices[0].message.content
+>                 self.finished.emit(response)
+83a188
+>         self.setSizePolicy(QSizePolicy.Preferred, QSizePolicy.Expanding)
+85c190,191
+<             bg_color = "#007AFF"
+---
+>             # bg_color = "#007AFF"
+>             bg_color = "#FAB8D8"
+99a206
+>         self.adjustSize()
+102c209
+<     def __init__(self, video_widget):
+---
+>     def __init__(self, video_widget, name, species):
+126,127d232
+<         self.name = "Hippo"
+<         
+130a236,239
+>         # Pet info
+>         self.name = name
+>         self.species = species
+> 
+183c292
+<         self.worker = GeminiWorker(question, filename)
+---
+>         self.worker = SweatshopWorker(question, filename, self.name, self.species)
+232a342,343
+>         self.chat_layout.update()
+>         bubble.adjustSize()
+245a357,359
+>         name = "Bambi"
+>         species = "Bunny"
+> 
+254c368
+<         self.chat_window = ChatWindow(video_widget=self.video_widget)
+---
+>         self.chat_window = ChatWindow(video_widget=self.video_widget, name=name, species=species)
