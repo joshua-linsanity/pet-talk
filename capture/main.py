@@ -1,14 +1,76 @@
 import sys
 import cv2
 import PIL
+import random
 import base64
 from PyQt5.QtWidgets import *
 from PyQt5.QtCore import *
 from PyQt5.QtGui import *
-from helpers import *
 from openai import OpenAI
 
 worker = OpenAI()
+
+##############################
+# Worker Thread for Open AI  #
+##############################
+
+def get_load_message():
+    messages = [
+        "Hopping right into action, hold on a sec!",
+        "Nibbling on some carrots of data, please wait!",
+        "Hang tight, I'm leaping into your request!",
+        "Carrots in hand, I’m busy crunching details!",
+        "Hold your ears, I'm bounding over to it!",
+        "Just a bunny hop away, almost there!",
+        "Gathering carrots and cuddles, please wait!",
+        "Ears up, I'm whisking up your request!",
+        "In a hoppy hurry, your info is coming!",
+        "Binkying through data, please hold on!",
+        "Hopping into action, one carrot at a time!",
+        "Pause for a moment, I'm on a bunny trail!",
+        "Hare-ing on to the details, please wait!",
+        "Bunny breath in, bunny breath out, almost ready!",
+        "Tail wags and bunny hops, your info is near!",
+        "Just a hop and a skip away from completion!",
+        "Crunching carrots and data, hang tight!",
+        "Hold tight, I'm just nibbling through the details!",
+        "Hop, skip, and wait a bit longer, almost there!",
+        "Bunny-speed loading in progress, hold your whiskers!"
+    ]
+    return random.choice(messages)
+
+def create_circular_pixmap(image_path, size):
+    # Load the image
+    pixmap = QPixmap(image_path)
+    if pixmap.isNull():
+        # Create a placeholder pixmap if loading fails
+        pixmap = QPixmap(size, size)
+        pixmap.fill(Qt.gray)
+
+    # Crop the pixmap to a square based on the smallest dimension
+    s = min(pixmap.width(), pixmap.height())
+    rect = QRect((pixmap.width() - s) // 2, (pixmap.height() - s) // 2, s, s)
+    pixmap = pixmap.copy(rect)
+
+    # Create a square pixmap with transparency to hold the circular image
+    circular = QPixmap(s, s)
+    circular.fill(Qt.transparent)
+
+    # Draw the circular image
+    painter = QPainter(circular)
+    painter.setRenderHint(QPainter.Antialiasing)
+    path = QPainterPath()
+    path.addEllipse(0, 0, s, s)
+    painter.setClipPath(path)
+    painter.drawPixmap(0, 0, pixmap)
+    painter.end()
+
+    # Scale the resulting pixmap to the desired size
+    return circular.scaled(size, size, Qt.KeepAspectRatio, Qt.SmoothTransformation)
+
+def encode_image(image_path):
+    with open(image_path, "rb") as image_file:
+        return base64.b64encode(image_file.read()).decode("utf-8")
 
 ##############################
 # Worker Thread for Open AI  #
@@ -303,7 +365,7 @@ class ChatWindow(QWidget):
 
     def show_loading_indicator(self):
         # Create a temporary loading bubble (aligned left)
-        self.loading_label = ChatBubble("Paws a second! I'm hopping to it...", is_sender=False)
+        self.loading_label = ChatBubble(get_load_message(), is_sender=False)
         loading_layout = QHBoxLayout()
         loading_layout.addWidget(self.loading_label)
         loading_layout.addStretch()

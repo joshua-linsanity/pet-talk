@@ -6,6 +6,7 @@ from PyQt5.QtCore import *
 from PyQt5.QtGui import *
 import base64
 
+
 def create_circular_pixmap(image_path, size):
     # Load the image
     pixmap = QPixmap(image_path)
