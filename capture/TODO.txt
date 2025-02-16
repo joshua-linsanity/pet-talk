@@ -1,0 +1,7 @@
+1. Format the response from Gemini
+    Limit the length
+    Format this properly
+    Make it detect whether the query is conversational or asking about diagnostics
+    Format tone respectively
+2. Connect the webcam
+3. Pitch this as a security cam 24/7
