@@ -260,6 +260,7 @@ class ChatBubble(QLabel):
         super().__init__(text)
         self.setWordWrap(True)
         self.setMaximumWidth(400)
+        self.setSizePolicy(QSizePolicy.Preferred, QSizePolicy.Expanding)
         if is_sender:
             bg_color = "#007AFF"
             text_color = "#FFFFFF"
@@ -412,6 +413,8 @@ class ChatWindow(QWidget):
         receiver_layout.addWidget(bubble)
         receiver_layout.addStretch()
         self.chat_layout.addLayout(receiver_layout)
+        self.chat_layout.update()
+        bubble.adjustSize()
         self._scroll_to_bottom()
     
     def _scroll_to_bottom(self):
