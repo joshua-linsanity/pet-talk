@@ -4,6 +4,7 @@
 from PyQt5.QtWidgets import *
 from PyQt5.QtCore import *
 from PyQt5.QtGui import *
+import base64
 
 def create_circular_pixmap(image_path, size):
     # Load the image
@@ -34,3 +35,6 @@ def create_circular_pixmap(image_path, size):
     # Scale the resulting pixmap to the desired size
     return circular.scaled(size, size, Qt.KeepAspectRatio, Qt.SmoothTransformation)
 
+def encode_image(image_path):
+    with open(image_path, "rb") as image_file:
+        return base64.b64encode(image_file.read()).decode("utf-8")

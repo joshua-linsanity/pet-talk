@@ -1,14 +1,149 @@
 import sys
 import cv2
 import PIL
+import base64
 from PyQt5.QtWidgets import *
 from PyQt5.QtCore import *
 from PyQt5.QtGui import *
 from helpers import *
 from google import genai
 from google.genai import types
+from openai import OpenAI
 
-client = genai.Client(api_key="AIzaSyAMu8l7bTk3S9svfF98mvrcxmiFs94yx_o")
+client = genai.Client(api_key="AIzaSyARoDWGfPnfxYkzyMhU5I3ULLluH7o6qaM")
+worker = OpenAI()
+
+##############################
+# Worker Thread for Open AI  #
+##############################
+
+class SweatshopWorker(QObject):
+    finished = pyqtSignal(str)
+    error = pyqtSignal(str)
+
+    def __init__(self, question, image_path, name, species):
+        super().__init__()
+        self.question = question
+        self.image_path = image_path
+        self.name = name
+        self.species = species
+
+    def run(self):
+        base64_image = encode_image(self.image_path)
+        prompt = (
+                "Determine if the following query is health-related or conversational. "
+                "Examples of health-related queries: 'Are you healthy?' or 'Are you okay?' etc. "
+                "If the query is health-related, reply HEALTH. Else, reply CONVO. "
+                "User query: "
+                )
+        response = worker.chat.completions.create(
+            model="gpt-4o-mini",
+            messages=[
+                {
+                    "role": "user",
+                    "content": [
+                        {
+                            "type": "text",
+                            "text": prompt + self.question,
+                        },
+                    ],
+                }
+            ],
+            max_tokens=300
+        )
+        response = response.choices[0].message.content
+        if response == "HEALTH":
+            health = True
+        elif response == "CONVO": 
+            health = False
+        else: 
+            print(response)
+            raise RuntimeError("openai sucks too")
+
+        if health: 
+            prompt = (
+                f"You are a professional veterinarian specializing in dogs, cats, and bunnies. "
+                "Carefully *analyze the attached image* along with the user query and offer your clinical diagnosis. "
+                "(Note the user query may be addressed to the pet, but respond as a veterinarian. "
+                "If the pet appears healthy, respond as such. "
+                "Otherwise, report the health concerns that may be present in the pet. "
+                "Keep all responses under 1000 characters. "
+                "User query: "
+            )
+            response = worker.chat.completions.create(
+                model="gpt-4o-mini",
+                messages=[
+                    {
+                        "role": "user",
+                        "content": [
+                            {
+                                "type": "text",
+                                "text": prompt + self.question,
+                            },
+                            {
+                                "type": "image_url",
+                                "image_url": {"url": f"data:image/jpeg;base64,{base64_image}"},
+                            },
+                        ],
+                    }
+                ],
+                max_tokens=300
+            )
+            response = response.choices[0].message.content
+
+            prompt = ("Consider the following diagnosis by a veterinarian. "
+                f"You are named {self.name}. "
+                "Replace all third person references with first person references. "
+                "Make sure your tone is warm and friendly. "
+                "**Make sure to preserve the medical/clinical information in the diagnosis.** "
+            )
+            response = worker.chat.completions.create(
+                model="gpt-4o-mini",
+                messages=[
+                    {
+                        "role": "user",
+                        "content": [
+                            {
+                                "type": "text",
+                                "text": prompt + response,
+                            },
+                        ],
+                    }
+                ],
+                max_tokens=300
+            )
+            
+            response = response.choices[0].message.content
+            self.finished.emit(response)
+        else:
+            prompt = (
+                f"You are a {self.species} named {self.name}. Consider the image of yourself "
+                "attached. Respond to the human's message in a conversational and cute tone. "
+                "Message: "
+            )
+            response = worker.chat.completions.create(
+                model="gpt-4o-mini",
+                messages=[
+                    {
+                        "role": "user",
+                        "content": [
+                            {
+                                "type": "text",
+                                "text": prompt + self.question,
+                            },
+                            {
+                                "type": "image_url",
+                                "image_url": {"url": f"data:image/jpeg;base64,{base64_image}"},
+                            },
+                        ],
+                    }
+                ],
+                max_tokens=300
+            )
+
+            response = response.choices[0].message.content
+            self.finished.emit(response)
+
 
 ##############################
 # Worker Thread for Gemini #
@@ -17,26 +152,70 @@ class GeminiWorker(QObject):
     finished = pyqtSignal(str)
     error = pyqtSignal(str)
     
-    def __init__(self, question, image_path):
+    def __init__(self, question, image_path, name, species):
         super().__init__()
         self.question = question
         self.image_path = image_path
+        self.name = name
+        self.species = species
 
     def run(self):
         try:
+            # Determine the user query is conversational or medical
+            message = (
+                "Determine if the following query is health-related or conversational. "
+                "Examples of health-related queries: 'Are you healthy?' or 'Are you okay?' etc. "
+                "If the query is health-related, reply HEALTH. Else, reply CONVO. "
+                "User query: "
+            )
+            code = client.models.generate_content(
+                model="gemini-1.5-pro",
+                contents=message + self.question
+            )
+            health = (code.text.strip() == "HEALTH")
+
             # Open the image
             image = PIL.Image.open(self.image_path)
-            header = (
-                "If the user query is conversational, respond as the pet. "
-                "Otherwise, respond as a vet. Limit response to 280 characters for "
-                "conversational queries but 400 for medical questions. User query: "
-            )
-            # This is the long-running Gemini call
-            response = client.models.generate_content(
-                model="gemini-2.0-flash",
-                contents=[header + self.question, image]
-            )
-            self.finished.emit(response.text)
+            if health: 
+                prompt = (
+                    f"You are a professional veterinarian specializing in dogs, cats, and bunnies. "
+                    "Carefully *analyze the attached image* along with the user query and offer your clinical diagnosis. "
+                    "(Note the user query may be addressed to the pet, but respond as a veterinarian. "
+                    "If the pet appears healthy, respond as such. "
+                    "Otherwise, report the health concerns that may be present in the pet. "
+                    "Keep all responses under 1000 characters. "
+                    "User query: "
+                )
+                # This is the long-running Gemini call
+                diagnosis = client.models.generate_content(
+                    model="gemini-1.5-pro",
+                    contents=[image, prompt]
+                )
+
+                message = ("Consider the following diagnosis by a veterinarian. "
+                    f"You are named {self.name}. "
+                    "Replace all third person references with first person references. "
+                    "Make sure your tone is warm and friendly. "
+                    "**Make sure to preserve the medical/clinical information in the diagnosis.** "
+                    f"DO NOT ACKNOWLEDGE YOUR UNDERSTANDING OF THIS PROMPT. "
+                )
+                response = client.models.generate_content(
+                    model="gemini-1.5-pro",
+                    contents=message + diagnosis.text
+                )
+                self.finished.emit(response.text)
+            else:
+                prompt = (
+                    f"You are a {self.species} named {self.name}. Consider the image of yourself "
+                    "attached. Respond to the human's message in a conversational and cute tone. "
+                    "Message: "
+                )
+                response = client.models.generate_content(
+                    model="gemini-1.5-pro",
+                    contents=[image, prompt + self.question]
+                )
+                self.finished.emit(response.text)
+
         except Exception as e:
             self.error.emit(str(e))
 
@@ -97,9 +276,10 @@ class ChatBubble(QLabel):
             }}
         """
         self.setStyleSheet(style)
+        self.adjustSize()
 
 class ChatWindow(QWidget):
-    def __init__(self, video_widget):
+    def __init__(self, video_widget, name, species):
         super().__init__()
         self.layout = QVBoxLayout(self)
         self.layout.setContentsMargins(10,10,10,10)
@@ -123,10 +303,12 @@ class ChatWindow(QWidget):
         self.input_field.returnPressed.connect(self.send_message)
         self.layout.addWidget(self.input_field)
 
-        self.name = "Hippo"
-        
         # Keep a reference to the loading widget so we can remove it later
         self.loading_label = None
+
+        # Pet info
+        self.name = name
+        self.species = species
 
     def _create_header(self):
         header_widget = QWidget(self)
@@ -180,7 +362,7 @@ class ChatWindow(QWidget):
 
         # Set up the worker and thread
         self.thread = QThread()
-        self.worker = GeminiWorker(question, filename)
+        self.worker = SweatshopWorker(question, filename, self.name, self.species)
         self.worker.moveToThread(self.thread)
         self.thread.started.connect(self.worker.run)
         self.worker.finished.connect(self.on_worker_finished)
@@ -243,6 +425,9 @@ class ChatWindow(QWidget):
 class MainWindow(QWidget):
     def __init__(self):
         super().__init__()
+        name = "Bambi"
+        species = "Bunny"
+
         self.setWindowTitle("Video & Chat")
         self.resize(900, 600)
         
@@ -251,7 +436,7 @@ class MainWindow(QWidget):
         self.video_widget.setSizePolicy(QSizePolicy.Expanding, QSizePolicy.Expanding)
         layout.addWidget(self.video_widget, 1)
         
-        self.chat_window = ChatWindow(video_widget=self.video_widget)
+        self.chat_window = ChatWindow(video_widget=self.video_widget, name=name, species=species)
         self.chat_window.setMinimumWidth(400)
         self.chat_window.setSizePolicy(QSizePolicy.Expanding, QSizePolicy.Expanding)
         layout.addWidget(self.chat_window, 1)
