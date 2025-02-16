@@ -23,9 +23,6 @@ class VideoWidget(QLabel):
         self.timer.timeout.connect(self.update_frame)
         self.timer.start(30)  # Approximately 30 FPS
 
-        # Make sure the widget expands to fill vertical space
-        self.setSizePolicy(QSizePolicy.Expanding, QSizePolicy.Expanding)
-
     def update_frame(self):
         ret, frame = self.cap.read()
         if ret:
@@ -34,9 +31,11 @@ class VideoWidget(QLabel):
             h, w, ch = frame.shape
             bytes_per_line = ch * w
             qimg = QImage(frame.data, w, h, bytes_per_line, QImage.Format_RGB888)
-            # Scale the pixmap to match the widget's height (width may be larger)
-            scaled_pix = QPixmap.fromImage(qimg).scaledToHeight(self.height(), Qt.SmoothTransformation)
-            self.setPixmap(scaled_pix)
+            # Scale the pixmap to fill the widget's size
+            pix = QPixmap.fromImage(qimg).scaled(
+                self.width(), self.height(), Qt.KeepAspectRatioByExpanding, Qt.SmoothTransformation
+            )
+            self.setPixmap(pix)
     
     def closeEvent(self, event):
         self.cap.release()
@@ -49,7 +48,7 @@ class ChatBubble(QLabel):
     def __init__(self, text, is_sender=True):
         super().__init__(text)
         self.setWordWrap(True)
-        self.setMaximumWidth(400) # Limit bubble width
+        self.setMaximumWidth(250)  # Limit the bubble width
         
         # iMessage-style colors
         if is_sender:
@@ -75,7 +74,7 @@ class ChatWindow(QWidget):
         super().__init__()
         # Main layout for chat panel
         self.layout = QVBoxLayout(self)
-        self.layout.setContentsMargins(10,10,10,10)
+        self.layout.setContentsMargins(10, 10, 10, 10)
         self.layout.setSpacing(10)
         
         # Add header with contact info
@@ -95,7 +94,6 @@ class ChatWindow(QWidget):
         # Input field for messages
         self.input_field = QLineEdit(self)
         self.input_field.setPlaceholderText("iMessage")
-        # Pressing Enter sends the message
         self.input_field.returnPressed.connect(self.send_message)
         self.layout.addWidget(self.input_field)
     
@@ -107,7 +105,7 @@ class ChatWindow(QWidget):
         
         # Profile picture
         profile_pic = QLabel(self)
-        pixmap = QPixmap("pfp.png")
+        pixmap = QPixmap("bunny.png")  # Make sure this image exists or adjust the path
         if pixmap.isNull():
             # Use a placeholder if image not found
             pixmap = QPixmap(50, 50)
@@ -117,13 +115,13 @@ class ChatWindow(QWidget):
         profile_pic.setFixedSize(50, 50)
         
         # Contact name
-        name_label = QLabel("Hippo", self)
+        name_label = QLabel("pet name", self)
         name_label.setStyleSheet("font-size: 18px; font-weight: bold;")
         name_label.setAlignment(Qt.AlignVCenter | Qt.AlignLeft)
         
         header_layout.addWidget(profile_pic)
         header_layout.addWidget(name_label)
-        header_layout.addStretch()  # Push content to the left
+        header_layout.addStretch()
         
         return header_widget
     
@@ -132,7 +130,7 @@ class ChatWindow(QWidget):
         if text:
             # Create sender bubble (aligned to right)
             sender_layout = QHBoxLayout()
-            sender_layout.addStretch()  # Push bubble to right
+            sender_layout.addStretch()
             bubble = ChatBubble(text, is_sender=True)
             sender_layout.addWidget(bubble)
             self.chat_layout.addLayout(sender_layout)
@@ -147,7 +145,7 @@ class ChatWindow(QWidget):
         receiver_layout = QHBoxLayout()
         bubble = ChatBubble(text, is_sender=False)
         receiver_layout.addWidget(bubble)
-        receiver_layout.addStretch()  # Push bubble to left
+        receiver_layout.addStretch()
         self.chat_layout.addLayout(receiver_layout)
         self._scroll_to_bottom()
     
@@ -163,24 +161,27 @@ class MainWindow(QWidget):
     def __init__(self):
         super().__init__()
         self.setWindowTitle("Video & Chat")
-        self.resize(900, 600)
         
-        # Horizontal layout: Video feed on the left, Chat UI on the right
-        layout = QHBoxLayout(self)
+        # Hardcode sizes for the video feed and chat panel:
+        video_width, video_height = 800, 600
+        chat_width, chat_height = 400, 600
         
+        # Create video widget and set its fixed size
         self.video_widget = VideoWidget(self)
-        # Allow video to expand more (especially in width) if needed
-        self.video_widget.setSizePolicy(QSizePolicy.Expanding, QSizePolicy.Expanding)
-        layout.addWidget(self.video_widget, 1) # stretch factor
+        self.video_widget.setFixedSize(video_width, video_height)
         
+        # Create chat widget and set its fixed size
         self.chat_window = ChatWindow()
-        self.chat_window.setMinimumWidth(400)
-        self.chat_window.setSizePolicy(QSizePolicy.Expanding, QSizePolicy.Expanding)
-        layout.addWidget(self.chat_window, 3)  # stretch factor
+        self.chat_window.setFixedSize(chat_width, chat_height)
+        
+        # Create the main layout and add the widgets side by side
+        layout = QHBoxLayout(self)
+        layout.addWidget(self.video_widget)
+        layout.addWidget(self.chat_window)
+        
+        # Optionally, set the main window's fixed size to exactly fit both widgets.
+        self.setFixedSize(video_width + chat_width, max(video_height, chat_height))
 
-#######################
-# Run the Application #
-#######################
 if __name__ == '__main__':
     app = QApplication(sys.argv)
     main_win = MainWindow()
