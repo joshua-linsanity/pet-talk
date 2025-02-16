@@ -1,7 +1,7 @@
 import sys
 from PyQt5.QtWidgets import (
     QApplication, QWidget, QVBoxLayout, QHBoxLayout,
-    QLineEdit, QPushButton, QLabel, QScrollArea
+    QLineEdit, QLabel, QScrollArea
 )
 from PyQt5.QtCore import Qt
 
@@ -9,70 +9,92 @@ class ChatBubble(QLabel):
     def __init__(self, text, is_sender=True):
         super().__init__(text)
         self.setWordWrap(True)
-        # Style bubble with rounded corners and padding
-        style = """
+        self.setMaximumWidth(250)  # Limit the bubble width
+        # iMessage-style colors
+        if is_sender:
+            bg_color = "#007AFF"  # Blue for sender
+            text_color = "#FFFFFF"
+        else:
+            bg_color = "#E5E5EA"  # Gray for receiver
+            text_color = "#000000"
+        # Styling: round corners, padding, and colors
+        style = f"""
             QLabel {{
-                border: 1px solid #ccc;
-                border-radius: 10px;
-                padding: 8px;
-                background-color: {};
-                max-width: 300px;
+                background-color: {bg_color};
+                color: {text_color};
+                border-radius: 15px;
+                padding: 10px;
+                font-size: 14px;
             }}
-        """.format("#DCF8C6" if is_sender else "#FFF")
+        """
         self.setStyleSheet(style)
 
 class ChatWindow(QWidget):
     def __init__(self):
+        # Set parameters
+        name = "Hippo"
+        species = "bunny"
+
         super().__init__()
-        self.setWindowTitle("Chat Window")
+        self.setWindowTitle(f"Chat with {name}")
         self.resize(400, 600)
-
+        
+        # Main vertical layout
         self.layout = QVBoxLayout(self)
-
-        # Create a scroll area for the chat bubbles
-        self.scroll_area = QScrollArea()
+        self.layout.setContentsMargins(10, 10, 10, 10)
+        self.layout.setSpacing(10)
+        
+        # Scroll area for chat bubbles
+        self.scroll_area = QScrollArea(self)
         self.scroll_area.setWidgetResizable(True)
-        self.scroll_content = QWidget()
-        self.scroll_layout = QVBoxLayout(self.scroll_content)
-        self.scroll_layout.addStretch()  # Push bubbles upward
-        self.scroll_area.setWidget(self.scroll_content)
+        self.scroll_area.setStyleSheet("border: none;")
+        
+        # Container widget and layout for chat bubbles
+        self.chat_content = QWidget()
+        self.chat_layout = QVBoxLayout(self.chat_content)
+        self.chat_layout.setAlignment(Qt.AlignTop)
+        self.scroll_area.setWidget(self.chat_content)
+        
         self.layout.addWidget(self.scroll_area)
-
+        
         # Input area
-        self.input_layout = QHBoxLayout()
-        self.text_input = QLineEdit()
-        self.send_button = QPushButton("Send")
-        self.send_button.clicked.connect(self.send_message)
-        self.input_layout.addWidget(self.text_input)
-        self.input_layout.addWidget(self.send_button)
-        self.layout.addLayout(self.input_layout)
+        self.input_field = QLineEdit(self)
+        self.input_field.setPlaceholderText("iMessage")
+        # Connect the Enter key (returnPressed) to sending a message
+        self.input_field.returnPressed.connect(self.send_message)
+        self.layout.addWidget(self.input_field)
 
+        # Make an introduction
+        intro = f"Hi! My name is {name}, your pet {species}. It's so great to chat to you!"
+        self.add_received_message(intro)
+    
     def send_message(self):
-        text = self.text_input.text().strip()
+        text = self.input_field.text().strip()
         if text:
-            # Create sender bubble (aligned to right)
+            # Create and add sender bubble (aligned to right)
+            sender_layout = QHBoxLayout()
+            sender_layout.addStretch()  # Pushes the bubble to the right
             bubble = ChatBubble(text, is_sender=True)
-            bubble_layout = QHBoxLayout()
-            bubble_layout.addStretch()
-            bubble_layout.addWidget(bubble)
-            self.scroll_layout.insertLayout(self.scroll_layout.count()-1, bubble_layout)
-
-            self.text_input.clear()
-
-            # Optionally simulate a response message (aligned to left)
-            self.add_response("Echo: " + text)
-
-            # Scroll to the bottom
-            self.scroll_area.verticalScrollBar().setValue(
-                self.scroll_area.verticalScrollBar().maximum()
-            )
-
-    def add_response(self, text):
+            sender_layout.addWidget(bubble)
+            self.chat_layout.addLayout(sender_layout)
+            
+            self.input_field.clear()
+            self._scroll_to_bottom()
+            
+    def add_received_message(self, text):
+        # Create and add receiver bubble (aligned to left)
+        receiver_layout = QHBoxLayout()
         bubble = ChatBubble(text, is_sender=False)
-        bubble_layout = QHBoxLayout()
-        bubble_layout.addWidget(bubble)
-        bubble_layout.addStretch()
-        self.scroll_layout.insertLayout(self.scroll_layout.count()-1, bubble_layout)
+        receiver_layout.addWidget(bubble)
+        receiver_layout.addStretch()  # Pushes the bubble to the left
+        self.chat_layout.addLayout(receiver_layout)
+        self._scroll_to_bottom()
+    
+    def _scroll_to_bottom(self):
+        # Scroll to the bottom after adding a new message
+        self.scroll_area.verticalScrollBar().setValue(
+            self.scroll_area.verticalScrollBar().maximum()
+        )
 
 if __name__ == '__main__':
     app = QApplication(sys.argv)
