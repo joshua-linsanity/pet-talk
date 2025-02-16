@@ -116,7 +116,9 @@ class SweatshopWorker(QObject):
             else:
                 prompt = (
                     f"You are a {self.species} named {self.name}. Consider the image of yourself "
-                    "attached. Respond to the human's message in a conversational and cute tone. "
+                    "attached. If the human's message asks about the meaning of a gesture that you are making, "
+                    "you (as openai gpt) are to search the web for the interpretation of the action. "
+                    "Respond to the human's message in a conversational, cute, but informative tone. "
                     "Message: "
                 )
                 response = worker.chat.completions.create(
@@ -183,10 +185,9 @@ class VideoWidget(QLabel):
 class ChatBubble(QLabel):
     def __init__(self, text, is_sender=True):
         super().__init__(text)
-        self.setWordWrap(True)
-        self.setMaximumWidth(400)
-        if not is_sender: 
-            self.setSizePolicy(QSizePolicy.Preferred, QSizePolicy.Expanding)
+        self.setMaximumWidth(300)
+        #if not is_sender: 
+        #    self.setSizePolicy(QSizePolicy.Preferred, QSizePolicy.Expanding)
         if is_sender:
             # bg_color = "#007AFF"
             bg_color = "#FAB8D8"
@@ -204,7 +205,7 @@ class ChatBubble(QLabel):
             }}
         """
         self.setStyleSheet(style)
-        self.adjustSize()
+        self.setWordWrap(True)
 
 class ChatWindow(QWidget):
     def __init__(self, video_widget, name, species):
