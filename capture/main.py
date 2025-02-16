@@ -67,6 +67,11 @@ class VideoWidget(QLabel):
             # Scale the pixmap to match the widget's height (width may be larger)
             scaled_pix = QPixmap.fromImage(qimg).scaledToHeight(self.height(), Qt.SmoothTransformation)
             self.setPixmap(scaled_pix)
+
+    def get_current_frame(self):
+        ret, frame = self.cap.read()
+        if ret: return frame
+        return None
     
     def closeEvent(self, event):
         self.cap.release()
@@ -101,12 +106,13 @@ class ChatBubble(QLabel):
         self.setStyleSheet(style)
 
 class ChatWindow(QWidget):
-    def __init__(self):
+    def __init__(self, video_widget):
         super().__init__()
         # Main layout for chat panel
         self.layout = QVBoxLayout(self)
         self.layout.setContentsMargins(10,10,10,10)
         self.layout.setSpacing(10)
+        self.video_widget = video_widget
         
         # Add header with contact info
         self.header = self._create_header()
@@ -170,7 +176,14 @@ class ChatWindow(QWidget):
             self.input_field.clear()
             self._scroll_to_bottom()
             # Simulate a response message
-            self.add_received_message("Echo: " + text)
+            self.add_received_message()
+
+    def process_with_vision_api(self, question):
+        frame = self.video_widget.get_current_frame()
+        while frame is None:
+            frame = self.video_widget.get_current_frame()
+        
+        # TODO: query the current frame
     
     def add_received_message(self, text):
         # Create receiver bubble (aligned to left)
@@ -197,13 +210,12 @@ class MainWindow(QWidget):
         
         # Horizontal layout: Video feed on the left, Chat UI on the right
         layout = QHBoxLayout(self)
-        
         self.video_widget = VideoWidget(self)
         # Allow video to expand more (especially in width) if needed
         self.video_widget.setSizePolicy(QSizePolicy.Expanding, QSizePolicy.Expanding)
         layout.addWidget(self.video_widget, 1) # stretch factor
         
-        self.chat_window = ChatWindow()
+        self.chat_window = ChatWindow(video_widget=self.video_widget)
         self.chat_window.setMinimumWidth(400)
         self.chat_window.setSizePolicy(QSizePolicy.Expanding, QSizePolicy.Expanding)
         layout.addWidget(self.chat_window, 1)  # stretch factor
