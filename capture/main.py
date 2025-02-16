@@ -112,13 +112,7 @@ class SweatshopWorker(QObject):
                 max_tokens=300
             )
             response = response.choices[0].message.content
-            if response == "HEALTH":
-                health = True
-            elif response == "CONVO": 
-                health = False
-            else: 
-                print(response)
-                raise RuntimeError("openai sucks too")
+            health = (response == "HEALTH")
 
             if health: 
                 prompt = (
@@ -131,7 +125,7 @@ class SweatshopWorker(QObject):
                     "User query: "
                 )
                 response = worker.chat.completions.create(
-                    model="gpt-4o-mini",
+                    model="sonar-pro",
                     messages=[
                         {
                             "role": "user",
@@ -184,7 +178,7 @@ class SweatshopWorker(QObject):
                     "Message: "
                 )
                 response = worker.chat.completions.create(
-                    model="gpt-4o-mini",
+                    model="sonar-pro",
                     messages=[
                         {
                             "role": "user",
