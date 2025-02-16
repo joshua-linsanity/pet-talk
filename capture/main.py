@@ -184,6 +184,7 @@ class ChatWindow(QWidget):
             frame = self.video_widget.get_current_frame()
         
         # TODO: query the current frame
+
     
     def add_received_message(self, text):
         # Create receiver bubble (aligned to left)
