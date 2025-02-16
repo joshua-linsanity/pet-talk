@@ -1,41 +1,14 @@
 import sys
 import cv2
+import PIL
 from PyQt5.QtWidgets import *
 from PyQt5.QtCore import *
 from PyQt5.QtGui import *
+from helpers import *
+from google import genai
+from google.genai import types
 
-##############################
-# Helper functions #
-##############################
-
-def create_circular_pixmap(image_path, size):
-    # Load the image
-    pixmap = QPixmap(image_path)
-    if pixmap.isNull():
-        # Create a placeholder pixmap if loading fails
-        pixmap = QPixmap(size, size)
-        pixmap.fill(Qt.gray)
-
-    # Crop the pixmap to a square based on the smallest dimension
-    s = min(pixmap.width(), pixmap.height())
-    rect = QRect((pixmap.width() - s) // 2, (pixmap.height() - s) // 2, s, s)
-    pixmap = pixmap.copy(rect)
-
-    # Create a square pixmap with transparency to hold the circular image
-    circular = QPixmap(s, s)
-    circular.fill(Qt.transparent)
-
-    # Draw the circular image
-    painter = QPainter(circular)
-    painter.setRenderHint(QPainter.Antialiasing)
-    path = QPainterPath()
-    path.addEllipse(0, 0, s, s)
-    painter.setClipPath(path)
-    painter.drawPixmap(0, 0, pixmap)
-    painter.end()
-
-    # Scale the resulting pixmap to the desired size
-    return circular.scaled(size, size, Qt.KeepAspectRatio, Qt.SmoothTransformation)
+client = genai.Client(api_key="AIzaSyAMu8l7bTk3S9svfF98mvrcxmiFs94yx_o")
 
 ##############################
 # Video Widget (OpenCV feed) #
@@ -134,6 +107,9 @@ class ChatWindow(QWidget):
         # Pressing Enter sends the message
         self.input_field.returnPressed.connect(self.send_message)
         self.layout.addWidget(self.input_field)
+
+        # Input parameters
+        self.name = "Hippo"
     
     def _create_header(self):
         header_widget = QWidget(self)
@@ -176,15 +152,25 @@ class ChatWindow(QWidget):
             self.input_field.clear()
             self._scroll_to_bottom()
             # Simulate a response message
-            self.add_received_message()
+            self.process_query(text)
 
-    def process_with_vision_api(self, question):
+    def process_query(self, question):
         frame = self.video_widget.get_current_frame()
         while frame is None:
             frame = self.video_widget.get_current_frame()
         
         # TODO: query the current frame
+        filename = "current_frame.jpg"
+        if not cv2.imwrite(filename, frame):
+            add_received_message("That image didn't process! Could you try again?")
+        image = PIL.Image.open(filename)
+        client = genai.Client(api_key="AIzaSyAMu8l7bTk3S9svfF98mvrcxmiFs94yx_o")
 
+        header = "You are a professional veterinarian with years of experience working with all sorts of species. Carefully analyze the attached image of {self.name}. Respond to the user's prompt with carefuly, clinical observations in a compassionate but objective tone. User query: "
+        response = client.models.generate_content(
+                model="gemini-2.0-flash", 
+                contents=[header + question, image])
+        self.add_received_message(response.text)
     
     def add_received_message(self, text):
         # Create receiver bubble (aligned to left)
