@@ -6,11 +6,8 @@ from PyQt5.QtWidgets import *
 from PyQt5.QtCore import *
 from PyQt5.QtGui import *
 from helpers import *
-from google import genai
-from google.genai import types
 from openai import OpenAI
 
-client = genai.Client(api_key="AIzaSyARoDWGfPnfxYkzyMhU5I3ULLluH7o6qaM")
 worker = OpenAI()
 
 ##############################
@@ -143,81 +140,6 @@ class SweatshopWorker(QObject):
 
             response = response.choices[0].message.content
             self.finished.emit(response)
-
-
-##############################
-# Worker Thread for Gemini #
-##############################
-class GeminiWorker(QObject):
-    finished = pyqtSignal(str)
-    error = pyqtSignal(str)
-    
-    def __init__(self, question, image_path, name, species):
-        super().__init__()
-        self.question = question
-        self.image_path = image_path
-        self.name = name
-        self.species = species
-
-    def run(self):
-        try:
-            # Determine the user query is conversational or medical
-            message = (
-                "Determine if the following query is health-related or conversational. "
-                "Examples of health-related queries: 'Are you healthy?' or 'Are you okay?' etc. "
-                "If the query is health-related, reply HEALTH. Else, reply CONVO. "
-                "User query: "
-            )
-            code = client.models.generate_content(
-                model="gemini-1.5-pro",
-                contents=message + self.question
-            )
-            health = (code.text.strip() == "HEALTH")
-
-            # Open the image
-            image = PIL.Image.open(self.image_path)
-            if health: 
-                prompt = (
-                    f"You are a professional veterinarian specializing in dogs, cats, and bunnies. "
-                    "Carefully *analyze the attached image* along with the user query and offer your clinical diagnosis. "
-                    "(Note the user query may be addressed to the pet, but respond as a veterinarian. "
-                    "If the pet appears healthy, respond as such. "
-                    "Otherwise, report the health concerns that may be present in the pet. "
-                    "Keep all responses under 1000 characters. "
-                    "User query: "
-                )
-                # This is the long-running Gemini call
-                diagnosis = client.models.generate_content(
-                    model="gemini-1.5-pro",
-                    contents=[image, prompt]
-                )
-
-                message = ("Consider the following diagnosis by a veterinarian. "
-                    f"You are named {self.name}. "
-                    "Replace all third person references with first person references. "
-                    "Make sure your tone is warm and friendly. "
-                    "**Make sure to preserve the medical/clinical information in the diagnosis.** "
-                    f"DO NOT ACKNOWLEDGE YOUR UNDERSTANDING OF THIS PROMPT. "
-                )
-                response = client.models.generate_content(
-                    model="gemini-1.5-pro",
-                    contents=message + diagnosis.text
-                )
-                self.finished.emit(response.text)
-            else:
-                prompt = (
-                    f"You are a {self.species} named {self.name}. Consider the image of yourself "
-                    "attached. Respond to the human's message in a conversational and cute tone. "
-                    "Message: "
-                )
-                response = client.models.generate_content(
-                    model="gemini-1.5-pro",
-                    contents=[image, prompt + self.question]
-                )
-                self.finished.emit(response.text)
-
-        except Exception as e:
-            self.error.emit(str(e))
 
 ##############################
 # Video Widget (OpenCV feed) #
